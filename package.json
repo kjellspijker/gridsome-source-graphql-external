@@ -1,0 +1,21 @@
+{
+  "name": "gridsome-source-graphql-external",
+  "version": "0.0.1",
+  "description": "A gridsome source plugin for external graphql APIs",
+  "main": "index.js",
+  "scripts": {},
+  "author": "Kjell Spijker",
+  "license": "MIT",
+  "dependencies": {
+    "@gridsome/source-graphql": "^0.1.0",
+    "apollo-link-http": "^1.5.16",
+    "graphql-tools": "^4.0.7",
+    "node-fetch": "^2.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=8.3"
+  }
+}
