@@ -1,8 +1,14 @@
-const {introspectSchema} = require('graphql-tools');
+const {ApolloClient} = require('apollo-client');
+const gql = require('graphql-tag');
+const {InMemoryCache} = require('apollo-cache-inmemory');
+const {HttpLink} = require('apollo-link-http');
+const {buildClientSchema, printSchema} = require('graphql/utilities');
+const fs = require('fs');
+const {introspectionQuery} = require('graphql');
 const fetch = require('node-fetch');
-const {createHttpLink} = require('apollo-link-http');
 const path = require('path');
 const {templates} = require(path.join(__dirname, '..', '..', 'gridsome.config.js'));
+const easygraphqlSchemaParser = require('easygraphql-parser');
 
 module.exports = class GraphQLEndpoint {
     static defaultOptions() {
@@ -10,83 +16,102 @@ module.exports = class GraphQLEndpoint {
             url: undefined,
             fieldName: undefined,
             typeName: undefined,
-            headers: {}
+            headers: {},
+            options: {
+                useGetForQueries: false
+            }
         };
     }
 
-    constructor(api, {url, fieldName, typeName, headers}) {
-        const collectionsToMake = {};
+    constructor(api, {url, fieldName, typeName, headers, options}) {
+        this.url = url;
+        const collectionsToMake = [];
         for (const template of Object.keys(templates)) {
             const entry = templates[template];
             for (const entryElement of entry) {
                 if (entryElement.hasOwnProperty('externalGraphQL')) {
-                    collectionsToMake[entryElement.externalGraphQL] = false;
+                    collectionsToMake.push(entryElement.externalGraphQL);
                 }
             }
         }
 
         api.loadSource(async (actions) => {
-            const introspection = await introspectSchema(createHttpLink({uri: url, fetch}));
-            const introspectionFields = introspection._queryType._fields;
+            const res = await fetch(url, {
+                method: 'post',
+                body: JSON.stringify({query: introspectionQuery}),
+            });
 
-            for (const introspectionElement of Object.keys(introspectionFields)) {
-                let collectionName = introspectionElement;
-                let shouldContinue = true;
-                for (const template of Object.keys(templates)) {
-                    for (const item of templates[template]) {
-                        if (item.hasOwnProperty('externalGraphQL') && introspectionElement === item.externalGraphQL) {
-                            shouldContinue = false;
-                            collectionName = template;
-                        }
-                    }
-                }
-                if (shouldContinue) {
-                    continue;
-                }
+            const queries = {};
 
-                const fields = this.getFieldsOfType(introspectionFields[introspectionElement]);
+            const schema = await this.buildGraphqlFile((await res.json()).data);
 
-                let query = '{ ' + introspectionElement + ' { ';
-                for (const field of fields) {
-                    query += field + ' ';
-                }
-                query += '} }';
+            const ast = easygraphqlSchemaParser(schema);
 
-                const {data} = await (await fetch(url, {
-                    method: 'post',
-                    body: JSON.stringify({query}),
-                    headers: {'Content-Type': 'application/json'},
-                })).json();
+            const link = new HttpLink({
+                headers,
+                useGETForQueries: options.useGetForQueries,
+                fetch,
+                uri: url
+            });
+            const client = new ApolloClient({
+                cache: new InMemoryCache(),
+                link,
+            });
 
-                const collection = actions.addCollection(collectionName);
-                const items = data[introspectionElement];
-
-                // TODO figure out if this is actually what I want (or check on types)
-                // TODO issue is that queries break when there is no data in the table
-                if (items.length === 0) {
-                    const node = {};
-                    for (const field of fields) {
-                        node[field] = 'null';
-                    }
-                    items.push(node);
-                }
-
-                for (const item of items) {
+            for (const typeName of collectionsToMake) {
+                const query = this.startQuery(ast, typeName);
+                debugger
+                const res = await client.query({
+                    query: gql(query),
+                });
+                const collection = actions.addCollection(typeName);
+                for (const item of res.data[typeName]) {
                     collection.addNode(item);
                 }
             }
+            debugger
+
         });
     }
 
-    getFieldsOfType(obj) {
-        let types = obj.type;
-        while (!types.hasOwnProperty('_fields')) {
-            types = types.ofType;
+    startQuery(ast, typeName) {
+        return '{ ' + typeName + ' ' + this.makeQuery(ast, typeName, new Set()) + ' }'
+    }
+
+    makeQuery(ast, typeName, visited) {
+        let query = '';
+        if (!visited.has(typeName) && ast.hasOwnProperty(typeName)) {
+            visited.add(typeName);
+            query += `{`;
+
+            const type = ast[typeName];
+            if (type.hasOwnProperty('fields')) {
+                for (const field of type.fields) {
+                    if (ast.hasOwnProperty(field.type)) {
+                        if (visited.has(field.type)) {
+                            continue;
+                        }
+                        query += ' ' + field.name + ' ' + this.makeQuery(ast, field.type, visited);
+                    } else {
+                        query += ' ' + field.name;
+                    }
+                }
+            }
+
+            query += ' }';
+        } else if (visited.has(typeName)) {
+            return '';
         }
-        const output = [];
-        for (const type of Object.keys(types._fields)) {
-            output.push(types._fields[type].name);
+        visited.delete(typeName);
+        return query;
+    }
+
+    async buildGraphqlFile(introspectionFields) {
+        const schema = buildClientSchema(introspectionFields);
+        const print = printSchema(schema);
+        if (process.env.NODE_ENV === 'development') {
+            fs.writeFileSync('gridsome-source-graphql-external.gql', print);
         }
-        return output;
+        return print;
     }
 };
