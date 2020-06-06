@@ -15,7 +15,6 @@ module.exports = {
                 headers: {
                     Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
                 },
-                slugName: 'slug'
             }
         }
     ],
@@ -24,8 +23,9 @@ module.exports = {
             {
                 path: '/news/:slug',
                 component: './src/templates/NewsArticle.vue',
-                fieldName: 'articles'
-            }
+                fieldName: 'articles',
+                slugName: 'slug'
+           }
         ]
     }
 }
@@ -64,8 +64,14 @@ query {
         name
     }
 }
-``` 
+```
 The value of `fieldName` would, in this case, be `dogs`.
+
+### slugName
+
+- Type: `string` _required_
+
+The name of the slug property to be used (case-sensitive).
 
 ## Options
 

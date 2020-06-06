@@ -35,20 +35,20 @@ module.exports = class GraphQLEndpoint {
                                 ${fieldName} {
                                     ${template.fieldName} {
                                         id
-                                        ${slugName}
+                                        ${template.slugName}
                                     }
                                 }
                             }
                             `);
 
                             response.data[fieldName][template.fieldName].forEach(entry => {
-                                const path = template.path.replace(':slug', entry[slugName]);
+                                const path = template.path.replace(':slug', entry[template.slugName]);
                                 createPage({
                                     path,
                                     component: templatePath,
                                     context: {
                                         id: entry.id,
-                                        slug: entry[slugName]
+                                        slug: entry[template.slugName]
                                     }
                                 });
                             });
