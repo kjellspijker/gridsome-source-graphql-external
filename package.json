@@ -6,15 +6,7 @@
   "author": "Kjell Spijker",
   "license": "MIT",
   "dependencies": {
-    "@gridsome/source-graphql": "^0.1.0",
-    "apollo-cache-inmemory": "^1.6.5",
-    "apollo-client": "^2.6.8",
-    "apollo-link-http": "^1.5.16",
-    "graphql-tools": "^4.0.0",
-    "easygraphql-parser": "^0.0.13",
-    "graphql-introspect": "^1.0.0",
-    "graphql-tag": "^2.10.3",
-    "node-fetch": "^2.6.0"
+    "@gridsome/source-graphql": "^0.1.0"
   },
   "peerDependencies": {
     "graphql": "^14.0.0"
